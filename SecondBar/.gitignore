@@ -1,0 +1,7 @@
+# Build output
+build/
+*.o
+*.app/
+
+# The icns is generated from the iconset (see build.sh); the iconset is the source.
+Assets/*.icns
