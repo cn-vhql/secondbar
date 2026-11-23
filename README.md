@@ -9,6 +9,8 @@ just folds whatever it feels like into a `»` button — no rules, no choices. S
 gives that job back to you: you decide which apps go into a second bar, and one click
 brings them back.
 
+![The second bar open under the menu bar](docs/second-bar.png)
+
 ## What it does
 
 **Fold the icons you rarely use.** Pick the apps in a manager window, one switch per
@@ -39,6 +41,8 @@ self-signed app.
 
 **It tells you what it did.** Everything is logged to `~/Library/Logs/SecondBar.log`,
 including why an icon could not be pressed.
+
+![The manager window, one switch per app](docs/manager.png)
 
 ## Using it
 
