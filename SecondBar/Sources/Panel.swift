@@ -8,18 +8,16 @@ struct PanelEntry {
 
 /// The drop-down second bar: a grid of the icons currently kept out of the menu
 /// bar. Clicking one opens that app's own menu.
-final class Panel: NSObject, NSPopoverDelegate {
+final class Panel: NSObject {
     private let popover = NSPopover()
     private let view = PanelView()
 
     var onPick: ((String, _ restore: Bool) -> Void)?
-    var didClose: (() -> Void)?
 
     override init() {
         super.init()
         popover.behavior = .transient
         popover.animates = false
-        popover.delegate = self
         let controller = NSViewController()
         controller.view = view
         popover.contentViewController = controller
@@ -40,10 +38,6 @@ final class Panel: NSObject, NSPopoverDelegate {
 
     func close() {
         popover.performClose(nil)
-    }
-
-    func popoverDidClose(_ notification: Notification) {
-        didClose?()
     }
 }
 

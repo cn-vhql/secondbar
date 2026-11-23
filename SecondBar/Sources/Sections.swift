@@ -1,9 +1,9 @@
 import AppKit
 
-/// Which status items live in the second bar. macOS 27 can only hide a whole
-/// app's items, so sections are stored per bundle identifier, and the arrow's
-/// own position is the divider: ⌘-drag an icon to the left of the arrow to put it
-/// in the second bar.
+/// Which status items live in the second bar. macOS 27 can only hide a whole app's
+/// items, so this is stored per bundle identifier and decided by the manager
+/// window. Positions in the bar are deliberately not used: the arrow moves when the
+/// bar reflows, so a position read would keep re-deciding what the user already set.
 final class Sections {
     private static var hiddenKey: String { "hiddenBundles" }
     private static var knownKey: String { "knownBundles" }
@@ -32,8 +32,9 @@ final class Sections {
         defaults.set(Array(shownByUser).sorted(), forKey: Self.shownKey)
     }
 
-    /// Re-reads the arrangement. Only meaningful while the bar shows everything:
-    /// a hidden item reports a stale position.
+    /// Partitions a full read of the bar by position. Used once, on first launch
+    /// only, when there is no arrangement yet; afterwards `setHidden` is the only
+    /// input. Positions are only meaningful while every icon is visible.
     @discardableResult
     func refresh(items: [BarItem], dividerX: CGFloat) -> Bool {
         let bands = AXReader.menuBarBands()

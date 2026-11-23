@@ -61,9 +61,10 @@ macOS decides these, not this app:
   third-party items and stay put.
 - **Some apps ignore `AXPress`.** Measured on macOS 27: WireGuard, UURemote and
   Lumen open their menu; WeChat, QQ, CC Switch and the weather extra report
-  success and open nothing, even when fully visible. Synthetic mouse events do not
-  work on other apps' status items either, so those apps get brought to the front
-  instead of showing a broken click.
+  success and open nothing, even when fully visible. Synthetic mouse events (CGEvent
+  at every tap location) move the pointer but never open another app's status item
+  menu, so there is no fallback click: after ~1s of nothing, those apps are simply
+  brought to the front.
 - **Assessment mode suppresses the microphone and camera indicators** while it is
   active. Hiding is released on quit.
 
@@ -80,6 +81,7 @@ Sources/
   Panel.swift         the popover
   ManageWindow.swift  the manager window
   LoginItem.swift     launch at login
+  Log.swift           writes ~/Library/Logs/SecondBar.log
   SampleApps.swift    stand-in rows for --dump-ui
 tools/makeicon.swift  draws the app icon
 ```

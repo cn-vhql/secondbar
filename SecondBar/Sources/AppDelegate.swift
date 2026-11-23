@@ -10,6 +10,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Apps let through for the moment so their own menu can open.
     private var temporary: [String] = []
     private var releaseTimer: Timer?
+    /// Bumped by every `open`, so a stale wait chain (which cannot be cancelled: it
+    /// is a chain of asyncAfter hops) stops instead of pressing the wrong icon.
+    private var openGeneration = 0
     private var trustTimer: Timer?
     private var isExpanded = false
 
@@ -115,7 +118,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// sits left of the arrow belongs to the second bar. Read from the button, not
     /// its window, because macOS 27 draws the whole menu bar in one window.
     private var dividerX: CGFloat {
-        guard let button = statusItem.button, let window = button.window else { return .greatestFiniteMagnitude }
+        // 0 rather than infinity: if the arrow has no button yet, nothing sits left
+        // of it, so a read must fold nothing instead of folding the whole bar.
+        guard let button = statusItem.button, let window = button.window else { return 0 }
         return window.convertToScreen(button.convert(button.bounds, to: nil)).midX
     }
 
@@ -137,8 +142,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// Shows every icon so the arrangement can be edited by ⌘-dragging, and reads
-    /// positions while the bar is complete.
+    /// Shows every icon. Nothing is read here: the arrangement comes from the
+    /// manager window, and reading positions on the way back in re-decided it.
     private func expand(hint: Bool = false) {
         releaseTimer?.invalidate()
         temporary = []
@@ -151,8 +156,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// Reads the divider and remembers which app sits on which side, then hides.
-    /// Only valid while every icon is visible.
     /// Reapplies the saved arrangement and reads nothing. Inferring the layout from
     /// positions was the source of two bugs: the arrow shifts when the bar reflows,
     /// and an icon sitting near the divider flips sides on every pass, so apps the
@@ -260,8 +263,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         manager.show(apps: managedApps(), isExpanded: isExpanded)
     }
 
-    /// Keeps the editor in step with the arrow: while expanded, edits made by
-    /// dragging in the bar are not readable, so the list only reports state.
+    /// Keeps the editor in step with the arrow. The manager is the only input to the
+    /// arrangement, so this only ever pushes state one way.
     private func refreshManager() {
         guard manager.isVisible else { return }
         manager.update(apps: managedApps(), isExpanded: isExpanded)
@@ -290,17 +293,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func open(bundle: String) {
         Log.write("open: \(bundle) requested from the second bar")
         panel.close()
+        // Clicking a second icon while the first is still being watched must not
+        // leave the first watcher running: it would clear `temporary` in the middle
+        // of the second open, folding the icon that is about to be pressed.
+        releaseTimer?.invalidate()
+        releaseTimer = nil
+        openGeneration += 1
         // A hidden item keeps a stale AX element: pressing it reports success and
         // does nothing. The app has to be let back into the bar first, and macOS
         // needs a variable moment to reflow, so the item is polled for rather than
         // waited on for a fixed time.
         temporary = [bundle]
         applyHiding()
-        waitForItem(of: bundle, attempt: 0)
+        waitForItem(of: bundle, attempt: 0, generation: openGeneration)
     }
 
     /// Polls for the app's item to exist in the bar, then presses it.
-    private func waitForItem(of bundle: String, attempt: Int) {
+    private func waitForItem(of bundle: String, attempt: Int, generation: Int) {
+        // A newer open superseded this one: leave its icon alone, the newer request
+        // owns `temporary` now.
+        guard generation == openGeneration else {
+            Log.write("open: dropped stale wait for \(bundle)")
+            return
+        }
         let target = AXReader.items().first { $0.bundle == bundle && AXReader.isInMenuBar($0.frame) }
         if let target, let element = target.element {
             let anchors = menuAnchors(for: bundle)
@@ -309,13 +324,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 // Start watching before returning: a press that opens a menu blocks
                 // the app's AX queue, so the menu may already be up by now.
                 Log.write("open: pressed \(bundle) at \(target.frame) (attempt \(attempt))")
-                waitForMenuClose(of: bundle, anchors: anchors)
+                waitForMenuClose(of: bundle, anchors: anchors, generation: generation)
             case .unsupported, .unreachable:
-                // Some items draw themselves and expose no usable press action
-                // (Lumen, QQ); a real click at the item's centre is the way in.
-                Log.write("open: \(bundle) not pressable (\(target.frame)), clicking")
-                waitForMenuClose(of: bundle, anchors: anchors)
-                AXReader.click(at: CGPoint(x: target.frame.midX, y: target.frame.midY))
+                // No element accepted a press. A synthetic click is not an option:
+                // measured on macOS 27, CGEvent at every tap location moves the
+                // pointer but never opens another app's status item menu. The watch
+                // below therefore ends in `fallback`, which brings the app forward.
+                Log.write("open: \(bundle) exposes no press action (\(target.frame))")
+                waitForMenuClose(of: bundle, anchors: anchors, generation: generation)
             }
             return
         }
@@ -326,20 +342,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
-            self?.waitForItem(of: bundle, attempt: attempt + 1)
+            self?.waitForItem(of: bundle, attempt: attempt + 1, generation: generation)
         }
     }
 
     /// Polls until the app's menu is gone, then puts its icon back in the second
     /// bar. A menu that was already open before the press is ignored, so a stale
     /// window cannot pin the icon in the bar forever.
-    private func waitForMenuClose(of bundle: String, anchors: Set<String>) {
+    private func waitForMenuClose(of bundle: String, anchors: Set<String>, generation: Int) {
         let pids = Set(NSRunningApplication.runningApplications(withBundleIdentifier: bundle).map(\.processIdentifier))
         var sawChange = false
         var ticks = 0
         releaseTimer?.invalidate()
         let timer = Timer(timeInterval: 0.2, repeats: true) { [weak self] timer in
-            guard let self else {
+            guard let self, generation == self.openGeneration else {
                 timer.invalidate()
                 return
             }
@@ -413,7 +429,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Minimal, opt-in command channel used to drive the app deterministically in
     /// tests: `SECOND_BAR_DEBUG=1 SECOND_BAR_DEBUG_FILE=/tmp/cmd` turns lines in that
     /// file into commands (open:<bundle>, toggle:<bundle>, collapse, expand, panel,
-    /// dump). With the environment variable unset it does nothing.
+    /// manager). With the environment variable unset it does nothing.
     private func startDebugChannelIfEnabled() {
         guard ProcessInfo.processInfo.environment["SECOND_BAR_DEBUG"] == "1" else { return }
         let path = ProcessInfo.processInfo.environment["SECOND_BAR_DEBUG_FILE"]
@@ -452,8 +468,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         if isExpanded {
-            // The bar is fully visible, so this is the moment the arrangement is
-            // read and applied.
             collapse()
             return
         }

@@ -11,7 +11,7 @@ struct ManagedApp {
 }
 
 /// The window that manages which apps are folded into the second bar.
-final class ManageWindow: NSObject, NSWindowDelegate {
+final class ManageWindow: NSObject {
     private var window: NSWindow?
     private var scroll = NSScrollView()
     // A scroll view's document view is laid out bottom-up unless it is flipped,
@@ -20,7 +20,6 @@ final class ManageWindow: NSObject, NSWindowDelegate {
 
     var onToggle: ((String, Bool) -> Void)?
     var onExpandAll: (() -> Void)?
-    var onReveal: (() -> Void)?
 
     func show(apps: [ManagedApp], isExpanded: Bool) {
         let window = makeWindow()
@@ -62,7 +61,6 @@ final class ManageWindow: NSObject, NSWindowDelegate {
         window.title = "SecondBar"
         window.titlebarAppearsTransparent = false
         window.isReleasedWhenClosed = false
-        window.delegate = self
         window.center()
         window.setFrameAutosaveName("SecondBarManager")
 
@@ -200,10 +198,6 @@ final class ManageWindow: NSObject, NSWindowDelegate {
 
     @objc private func expandAll() {
         onExpandAll?()
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        // The window is reused, so nothing to tear down.
     }
 }
 

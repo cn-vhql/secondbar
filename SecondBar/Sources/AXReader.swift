@@ -64,15 +64,23 @@ enum AXReader {
         return candidates.indices.compactMap { results[$0] }.flatMap { $0 }
     }
 
-    // nil means "this app did not answer", which callers treat as "keep it
-    // visible" rather than "hide it".
+    /// nil means "this app did not answer in time", which callers treat as "keep it
+    /// visible" rather than "hide it" and retry. Answering promptly that there is no
+    /// status bar is a different outcome and must not be retried: on macOS 27 the
+    /// ~90 apps without a menu bar reply with an error in well under a millisecond,
+    /// so conflating the two made every read pay a pointless second pass.
     private static func read(_ app: Candidate, timeout: Float) -> [BarItem]? {
         let element = AXUIElementCreateApplication(app.pid)
         AXUIElementSetMessagingTimeout(element, timeout)
-        guard let bar = value(element, "AXExtrasMenuBar"), CFGetTypeID(bar) == AXUIElementGetTypeID() else {
-            // Either no status items, or the app answers nothing at all. Both are
-            // "nothing to hide".
-            return []
+        var barValue: CFTypeRef?
+        let error = AXUIElementCopyAttributeValue(element, "AXExtrasMenuBar" as CFString, &barValue)
+        guard error == .success, let bar = barValue, CFGetTypeID(bar) == AXUIElementGetTypeID() else {
+            // "No such attribute" and "nothing there" are answers: nothing to hide.
+            // Anything else means the app stayed silent, so it is worth one retry.
+            switch error {
+            case .success, .noValue, .attributeUnsupported: return []
+            default: return nil
+            }
         }
         let children = self.children(bar as! AXUIElement)
         return children.map { child in
@@ -140,24 +148,6 @@ enum AXReader {
             }
         }
         return sawTarget ? .unsupported : .unreachable
-    }
-
-    static func moveMouse(to point: CGPoint) {
-        let source = CGEventSource(stateID: .hidSystemState)
-        CGEvent(mouseEventSource: source, mouseType: .mouseMoved,
-                mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
-    }
-
-    /// Clicks a point in Accessibility coordinates. Some status items draw
-    /// themselves and expose no press action, so a real click is the only way in.
-    static func click(at point: CGPoint) {
-        let source = CGEventSource(stateID: .hidSystemState)
-        for type in [CGEventType.leftMouseDown, .leftMouseUp] {
-            guard let event = CGEvent(mouseEventSource: source, mouseType: type,
-                                      mouseCursorPosition: point, mouseButton: .left) else { continue }
-            event.post(tap: .cghidEventTap)
-            usleep(40_000)
-        }
     }
 
     /// True while any of `pids` has a window at menu level, i.e. its menu is up.

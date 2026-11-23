@@ -1,6 +1,8 @@
 #!/bin/bash
-# Builds SecondBar.app from Sources/ into build/. No Xcode project and no signing
-# identity needed: an ad-hoc signature is enough for local use.
+# Builds SecondBar.app from Sources/ into build/. No Xcode project needed. A stable
+# self-signed identity is preferred (see make-identity.sh): an ad-hoc signature has
+# no identity, and TCC remembers the Accessibility grant by identity, so an ad-hoc
+# build loses the grant on every rebuild.
 set -euo pipefail
 cd "$(dirname "$0")"
 

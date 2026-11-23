@@ -13,7 +13,6 @@ final class Hiding {
     private var generation = 0
 
     var isHeld: Bool { assertion != nil }
-    var heldBundles: [String] { requested?.bundles ?? [] }
 
     /// Keeps only `bundles` visible. Unknown identifiers are ignored by macOS.
     /// `completion` runs on the main queue with whether the restriction landed.
