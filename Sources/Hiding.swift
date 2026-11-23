@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The SecondBar Authors
+
 import Foundation
 
 /// Holds macOS 27's menu bar visibility restriction: only the listed apps (and

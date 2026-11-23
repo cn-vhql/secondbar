@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The SecondBar Authors
 # Creates a self-signed code-signing identity in the login keychain, once.
 #
 # Why: TCC (the Accessibility permission) remembers an app by its signing

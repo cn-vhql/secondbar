@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The SecondBar Authors
 # Builds SecondBar.app from Sources/ into build/. No Xcode project needed. A stable
 # self-signed identity is preferred (see make-identity.sh): an ad-hoc signature has
 # no identity, and TCC remembers the Accessibility grant by identity, so an ad-hoc

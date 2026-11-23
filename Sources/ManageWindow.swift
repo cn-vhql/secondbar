@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The SecondBar Authors
+
 import AppKit
 
 /// One row of the manager: an app that can own menu bar items.

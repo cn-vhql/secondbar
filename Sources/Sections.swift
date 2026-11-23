@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The SecondBar Authors
+
 import AppKit
 
 /// Which status items live in the second bar. macOS 27 can only hide a whole app's

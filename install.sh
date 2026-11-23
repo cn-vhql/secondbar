@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The SecondBar Authors
 # Copies the built app to /Applications and (re)launches it.
 #
 # It has to live in /Applications: on macOS 27 an app run from anywhere else can

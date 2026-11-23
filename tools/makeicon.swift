@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The SecondBar Authors
+
 // Draws SecondBar.icns: a menu bar strip above a panel of icons, i.e. what the
 // app does. Run once; build.sh only regenerates when the iconset is missing.
 //

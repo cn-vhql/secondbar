@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The SecondBar Authors
+
 import AppKit
 
 /// Stand-in rows for `--dump-ui` / `--show-ui`, so the layout can be checked

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The SecondBar Authors
+
 import AppKit
 
 // `SecondBar --show-ui` opens the manager on screen with sample rows, for a real

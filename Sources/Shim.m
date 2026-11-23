@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The SecondBar Authors
+
 #import "Shim.h"
 #import <dlfcn.h>
 #import <objc/message.h>
