@@ -1,5 +1,9 @@
 # SecondBar
 
+[![release](https://img.shields.io/github/v/release/cn-vhql/secondbar?display_name=tag)](https://github.com/cn-vhql/secondbar/releases/latest)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+![platform](https://img.shields.io/badge/macOS-27%2B-lightgrey)
+
 给 macOS 27 用的「第二个菜单栏」，专门收纳那些很少用到、但又不舍得关掉的图标。
 
 macOS 27 把菜单栏改成了一个整体窗口。过去那种拖一根长分隔符、把图标挤出屏幕边缘的老办法彻底失效；系统自带的溢出控制只会把「装不下的」折进一个 `»` 按钮，既没有规则，也不给你选择权。SecondBar 把这件事实权交回你手上：哪些应用进第二个菜单栏由你决定，点一下就能把它们叫回来。
@@ -42,7 +46,19 @@ macOS 27 把菜单栏改成了一个整体窗口。过去那种拖一根长分�
 - 辅助功能权限。首次启动会请求，用于读取和点击其他应用的菜单栏图标。授权后不需要重启应用。
 - 应用必须放在 `/Applications`。macOS 会隐藏从其他位置运行的应用的图标，包括它自己的。
 
-## 构建与安装
+## 安装
+
+[下载最新版本](https://github.com/cn-vhql/secondbar/releases/latest)，解压，把 `SecondBar.app` 拖进 `/Applications`。
+
+第一次打开会被拦住，提示「无法验证开发者」。这个版本是 ad-hoc 签名，没有经过 Apple 公证——公证需要付费开发者账号。在**系统设置 → 隐私与安全性 → 仍要打开**里放行一次，或者自己清掉隔离标记：
+
+```sh
+xattr -dr com.apple.quarantine /Applications/SecondBar.app
+```
+
+然后按提示授予辅助功能权限。Release 由 GitHub Actions 在 macOS 27 的 runner 上构建，你可以对着 `.github/workflows/release.yml` 核对你要装的东西是怎么来的。
+
+## 从源码构建
 
 不需要 Xcode 工程，也不需要 Apple 开发者账号。
 

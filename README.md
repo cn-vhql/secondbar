@@ -1,5 +1,9 @@
 # SecondBar
 
+[![release](https://img.shields.io/github/v/release/cn-vhql/secondbar?display_name=tag)](https://github.com/cn-vhql/secondbar/releases/latest)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+![platform](https://img.shields.io/badge/macOS-27%2B-lightgrey)
+
 A second menu bar for macOS 27, for the icons you rarely need but cannot bear to
 give up.
 
@@ -63,7 +67,25 @@ including why an icon could not be pressed.
 - The app must live in `/Applications`. macOS hides the icons of an app running from
   elsewhere, including its own.
 
-## Build and install
+## Install
+
+[Download the latest release](https://github.com/cn-vhql/secondbar/releases/latest),
+unzip, and drag `SecondBar.app` into `/Applications`.
+
+The first launch will be blocked with *"Apple could not verify SecondBar is free of
+malware"*. The release is signed ad-hoc, not notarised — notarisation needs a paid
+Apple developer account. Allow it once in **System Settings → Privacy & Security →
+Open Anyway**, or clear the quarantine flag yourself:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/SecondBar.app
+```
+
+Then grant Accessibility when asked. Releases are built by GitHub Actions on a
+macOS 27 runner, so you can check what you are installing against the workflow in
+`.github/workflows/release.yml`.
+
+## Build from source
 
 No Xcode project, no Apple developer account.
 
