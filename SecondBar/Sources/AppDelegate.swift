@@ -195,7 +195,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                   found[bundle] == nil else { continue }
             found[bundle] = PanelEntry(bundle: bundle,
                                        name: Self.displayName(for: bundle, pid: item.pid, item: item),
-                                       icon: Self.icon(for: bundle, pid: item.pid, item: item))
+                                       icon: Self.icon(for: bundle, pid: item.pid))
         }
         return found.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
@@ -208,12 +208,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         bundle == InputSource.agentBundle ? InputSource.current() : nil
     }
 
-    private static func icon(for bundle: String, pid: pid_t?, item: BarItem? = nil) -> NSImage {
+    /// A running app's own icon, else the icon of its bundle on disk: an app that is
+    /// folded but not running (or whose items are owned by a helper) still has one.
+    private static func icon(for bundle: String, pid: pid_t?) -> NSImage {
         if let current = inputSourceOverride(for: bundle), current.icon.size != .zero {
             return current.icon
         }
-        let running = pid.flatMap { NSRunningApplication(processIdentifier: $0) }
-        return running?.icon ?? fallbackIcon
+        if let running = pid.flatMap({ NSRunningApplication(processIdentifier: $0) }),
+           let icon = running.icon {
+            return icon
+        }
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) {
+            return NSWorkspace.shared.icon(forFile: url.path)
+        }
+        return fallbackIcon
     }
 
     /// The row's key is the agent's bundle id, which means nothing to the user; show
@@ -259,13 +267,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             apps[bundle] = ManagedApp(bundle: bundle,
                                       name: Self.displayName(for: bundle, pid: item.pid, item: item),
                                       detail: Self.detail(for: bundle),
-                                      icon: Self.icon(for: bundle, pid: item.pid, item: item),
+                                      icon: Self.icon(for: bundle, pid: item.pid),
                                       isHidden: sections.hidden.contains(bundle),
                                       isRunning: true)
         }
+        // By name only, so flipping a switch does not move the row the user just
+        // clicked: folding is what the switch shows, not where the row sits.
         return apps.values.sorted { lhs, rhs in
-            if lhs.isHidden != rhs.isHidden { return lhs.isHidden }
-            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+            let order = lhs.name.localizedStandardCompare(rhs.name)
+            return order == .orderedSame ? lhs.bundle < rhs.bundle : order == .orderedAscending
         }
     }
 
