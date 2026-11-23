@@ -1,0 +1,102 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The SecondBar Authors
+#
+# Builds SecondBar on a GitHub-hosted macOS 27 runner and attaches the app to a
+# release. Triggered by pushing a v* tag, or by hand with a version to build.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, without the leading v (e.g. 1.1)"
+        required: true
+        default: "1.1"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # macOS 27 is only available as an arm64 image, and only under this label.
+    # macos-latest is still macOS 26, whose SDK cannot link against macOS 27 APIs.
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Resolve version
+        id: v
+        run: |
+          if [[ -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "building $VERSION"
+
+      - name: Build
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          # No self-signed identity on a runner; ad-hoc is the honest signature for
+          # a release that was not notarised by Apple.
+          CODESIGN_IDENTITY: "-"
+        run: ./build.sh
+
+      - name: Verify the bundle
+        run: |
+          set -euo pipefail
+          APP=build/SecondBar.app
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist"
+          codesign --verify --strict --verbose=2 "$APP"
+          # Refuse to ship a build whose minimum system version drifted.
+          grep -q "<string>27.0</string>" "$APP/Contents/Info.plist"
+
+      - name: Package
+        id: pkg
+        run: |
+          set -euo pipefail
+          NAME="SecondBar-${{ steps.v.outputs.version }}"
+          # ditto, not zip: it preserves the bundle's resource forks and permissions.
+          ditto -c -k --sequesterRsrc --keepParent build/SecondBar.app "$NAME.zip"
+          shasum -a 256 "$NAME.zip" > "$NAME.zip.sha256"
+          echo "zip=$NAME.zip" >> "$GITHUB_OUTPUT"
+          echo "sha=$NAME.zip.sha256" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: SecondBar-${{ steps.v.outputs.version }}
+          path: |
+            ${{ steps.pkg.outputs.zip }}
+            ${{ steps.pkg.outputs.sha }}
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          V="${{ steps.v.outputs.version }}"
+          cat > notes.md <<'NOTES'
+          Second bar for macOS 27: keeps the menu bar icons you rarely use out of the
+          way, and brings them back with their real menus when you click them.
+
+          ## Install
+
+          1. Unzip and drag `SecondBar.app` into `/Applications`. It has to live there:
+             macOS hides the menu bar icon of an app running from anywhere else.
+          2. Open it. macOS will refuse the first launch with "Apple could not verify
+             SecondBar is free of malware" — the build is signed ad-hoc, not notarised.
+             Allow it in **System Settings → Privacy & Security → Open Anyway**, or run
+             `xattr -dr com.apple.quarantine /Applications/SecondBar.app`.
+          3. Grant Accessibility when asked, then use the `»` icon in the menu bar.
+
+          Requires macOS 27 or later (Apple silicon).
+          NOTES
+          gh release create "v$V" \
+            --title "SecondBar $V" \
+            --notes-file notes.md \
+            "${{ steps.pkg.outputs.zip }}" "${{ steps.pkg.outputs.sha }}"
