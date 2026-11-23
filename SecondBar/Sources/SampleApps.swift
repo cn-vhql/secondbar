@@ -8,18 +8,18 @@ enum SampleApps {
             ?? NSImage(size: NSSize(width: 22, height: 22))
     }
 
+    private static func app(_ bundle: String, _ name: String, _ symbolName: String,
+                            hidden: Bool, running: Bool = true) -> ManagedApp {
+        ManagedApp(bundle: bundle, name: name, detail: bundle, icon: symbol(symbolName),
+                   isHidden: hidden, isRunning: running)
+    }
+
     static let all: [ManagedApp] = [
-        ManagedApp(bundle: "com.tencent.xinWeChat", name: "微信",
-                   icon: symbol("message.fill"), isHidden: true, isRunning: true),
-        ManagedApp(bundle: "com.tencent.qq", name: "QQ",
-                   icon: symbol("bubble.left.and.bubble.right.fill"), isHidden: true, isRunning: true),
-        ManagedApp(bundle: "com.wireguard.macos", name: "WireGuard",
-                   icon: symbol("lock.shield.fill"), isHidden: true, isRunning: true),
-        ManagedApp(bundle: "com.tencent.LemonMonitor", name: "腾讯柠檬清理",
-                   icon: symbol("sparkles"), isHidden: true, isRunning: true),
-        ManagedApp(bundle: "local.lumen.controller", name: "Lumen",
-                   icon: symbol("sun.max.fill"), isHidden: false, isRunning: true),
-        ManagedApp(bundle: "com.apple.weather.menu", name: "WeatherMenu",
-                   icon: symbol("cloud.sun.fill"), isHidden: true, isRunning: false),
+        app("com.tencent.xinWeChat", "微信", "message.fill", hidden: true),
+        app("com.tencent.qq", "QQ", "bubble.left.and.bubble.right.fill", hidden: true),
+        app("com.wireguard.macos", "WireGuard", "lock.shield.fill", hidden: true),
+        app("com.tencent.LemonMonitor", "腾讯柠檬清理", "sparkles", hidden: true),
+        app("local.lumen.controller", "Lumen", "sun.max.fill", hidden: false),
+        app("com.apple.weather.menu", "WeatherMenu", "cloud.sun.fill", hidden: true, running: false),
     ]
 }

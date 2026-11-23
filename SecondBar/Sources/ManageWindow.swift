@@ -2,8 +2,12 @@ import AppKit
 
 /// One row of the manager: an app that can own menu bar items.
 struct ManagedApp {
+    /// The key this row toggles: the bundle id whose items get folded.
     let bundle: String
     let name: String
+    /// What to show under the name. Usually the bundle id, but the input menu item's
+    /// key belongs to an agent the user never heard of, so it shows its real id.
+    let detail: String
     let icon: NSImage
     let isHidden: Bool
     /// False for an app that is not running, so its item cannot be seen right now.
@@ -157,7 +161,7 @@ final class ManageWindow: NSObject {
         name.lineBreakMode = .byTruncatingTail
         name.translatesAutoresizingMaskIntoConstraints = false
 
-        let subtitle = NSTextField(labelWithString: app.isRunning ? app.bundle : "\(app.bundle)（未运行）")
+        let subtitle = NSTextField(labelWithString: app.isRunning ? app.detail : "\(app.detail)（未运行）")
         subtitle.font = .systemFont(ofSize: 10)
         subtitle.textColor = .tertiaryLabelColor
         subtitle.lineBreakMode = .byTruncatingMiddle

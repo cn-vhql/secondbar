@@ -193,12 +193,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let bundle = item.bundle,
                   sections.hidden.contains(bundle),
                   found[bundle] == nil else { continue }
-            let app = NSRunningApplication(processIdentifier: item.pid)
             found[bundle] = PanelEntry(bundle: bundle,
-                                       name: item.ownerName ?? bundle,
-                                       icon: app?.icon ?? Self.fallbackIcon)
+                                       name: Self.displayName(for: bundle, pid: item.pid, item: item),
+                                       icon: Self.icon(for: bundle, pid: item.pid, item: item))
         }
         return found.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// The input menu item belongs to `TextInputMenuAgent`, whose own icon is a generic
+    /// placeholder and whose own name is "TextInputMenuAgent"; both belong to the
+    /// current input source instead. Shared by the second bar and the manager so the
+    /// two never disagree about what that entry looks like.
+    private static func inputSourceOverride(for bundle: String) -> InputSource.Current? {
+        bundle == InputSource.agentBundle ? InputSource.current() : nil
+    }
+
+    private static func icon(for bundle: String, pid: pid_t?, item: BarItem? = nil) -> NSImage {
+        if let current = inputSourceOverride(for: bundle), current.icon.size != .zero {
+            return current.icon
+        }
+        let running = pid.flatMap { NSRunningApplication(processIdentifier: $0) }
+        return running?.icon ?? fallbackIcon
+    }
+
+    /// The row's key is the agent's bundle id, which means nothing to the user; show
+    /// the input method's own id instead.
+    private static func detail(for bundle: String) -> String {
+        if bundle == InputSource.agentBundle, let real = InputSource.current()?.bundle { return real }
+        return bundle
+    }
+
+    private static func displayName(for bundle: String, pid: pid_t?, item: BarItem? = nil) -> String {
+        if let current = inputSourceOverride(for: bundle) { return current.name }
+        if let owner = item?.ownerName { return owner }
+        if let running = pid.flatMap({ NSRunningApplication(processIdentifier: $0) }) {
+            if let name = running.localizedName { return name }
+        }
+        return prettyName(for: bundle)
     }
 
     private static var fallbackIcon: NSImage {
@@ -215,8 +246,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for bundle in sections.hidden.union(sections.visible) {
             let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundle).first
             apps[bundle] = ManagedApp(bundle: bundle,
-                                      name: running?.localizedName ?? Self.prettyName(for: bundle),
-                                      icon: running?.icon ?? Self.fallbackIcon,
+                                      name: Self.displayName(for: bundle, pid: running?.processIdentifier),
+                                      detail: Self.detail(for: bundle),
+                                      icon: Self.icon(for: bundle, pid: running?.processIdentifier),
                                       isHidden: sections.hidden.contains(bundle),
                                       isRunning: running != nil)
         }
@@ -224,10 +256,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // first read they are not in either section yet.
         for item in AXReader.items() {
             guard let bundle = item.bundle, apps[bundle] == nil else { continue }
-            let running = NSRunningApplication(processIdentifier: item.pid)
             apps[bundle] = ManagedApp(bundle: bundle,
-                                      name: item.ownerName ?? running?.localizedName ?? bundle,
-                                      icon: running?.icon ?? Self.fallbackIcon,
+                                      name: Self.displayName(for: bundle, pid: item.pid, item: item),
+                                      detail: Self.detail(for: bundle),
+                                      icon: Self.icon(for: bundle, pid: item.pid, item: item),
                                       isHidden: sections.hidden.contains(bundle),
                                       isRunning: true)
         }

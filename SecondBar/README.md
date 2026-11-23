@@ -78,6 +78,7 @@ Sources/
   Hiding.swift        wraps the assessment-mode assertion
   Shim.h / Shim.m     dlopen + objc_msgSend, since the framework is private
   AXReader.swift      reading and pressing status items
+  InputSource.swift   icon and name of the current input method (see below)
   Panel.swift         the popover
   ManageWindow.swift  the manager window
   LoginItem.swift     launch at login
@@ -85,5 +86,14 @@ Sources/
   SampleApps.swift    stand-in rows for --dump-ui
 tools/makeicon.swift  draws the app icon
 ```
+
+### The input menu item
+
+The input menu item is not owned by the input method: `TextInputMenuAgent` owns it,
+so the owning process' icon is a generic grid placeholder and its name is
+`TextInputMenuAgent`. `InputSource.swift` reads the current input source through
+Carbon TIS instead, for both the glyph and the name. Those glyphs are template
+PDFs — defined purely by alpha with black RGB — so the image must be drawn
+templated; untemplated it stays black and disappears on a dark panel.
 
 Log: `~/Library/Logs/SecondBar.log`.
