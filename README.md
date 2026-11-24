@@ -52,7 +52,7 @@ including why an icon could not be pressed.
 
 | Action | Result |
 | --- | --- |
-| Click `»` | Open the second bar; click again to fold the icons back |
+| Click `»` | Open the second bar; click again, or click anywhere else, to close it |
 | Click an icon in the second bar | Open that app's own menu |
 | ⌥-click an icon in the second bar | Keep that app in the menu bar permanently |
 | ⌥-click `»` | Open the manager window |
@@ -161,6 +161,12 @@ Reading and pressing the folded icons uses the public Accessibility API: enumera
 menu stop answering Accessibility while the menu is up, so a `cannotComplete` error
 from the press actually means it worked; that distinction is what makes clicking a
 folded icon reliable.
+
+The second bar itself opens from a cached row list so a click is instant; the
+Accessibility walk that refreshes it runs in the background and corrects the contents
+in place a few milliseconds later. Because an accessory app never becomes active,
+`NSPopover`'s own "click outside to dismiss" does not fire for it, so the panel watches
+mouse-downs itself and closes on any click outside its frame and outside the `»`.
 
 ## Layout
 

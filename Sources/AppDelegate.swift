@@ -18,6 +18,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var openGeneration = 0
     private var trustTimer: Timer?
     private var isExpanded = false
+    /// Last successfully read second-bar contents. The panel opens from this, so a
+    /// click shows it immediately instead of after a full Accessibility walk.
+    private var cachedEntries: [PanelEntry] = []
+    private var entriesGeneration = 0
 
     // MARK: - Lifecycle
 
@@ -41,6 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.open(bundle: bundle)
             }
         }
+        panel.onClose = { Log.write("panel closed") }
 
         NotificationCenter.default.addObserver(
             self, selector: #selector(screensChanged),
@@ -100,10 +105,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Log.write("start: no arrangement yet, reading the current layout once")
             let items = AXReader.items()
             sections.refresh(items: items, dividerX: dividerX)
+            cachedEntries = makeEntries(from: items)
             Log.write("start: adopted \(sections.hidden.count) folded, \(sections.visible.count) visible")
             expand(hint: true)
         } else {
             applyHiding()
+            // Warm the cache so the first click does not show an empty panel.
+            refreshEntries(showing: false)
         }
     }
 
@@ -169,6 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateArrow()
         applyHiding()
         refreshManager()
+        refreshEntries(showing: false)
         Log.write("collapsed: \(sections.hidden.count) hidden, \(sections.visible.count) visible")
         if sections.hidden.isEmpty {
             Log.write("warning: nothing is folded yet")
@@ -189,10 +198,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Second bar
 
-    private func entries() -> [PanelEntry] {
+    /// Builds the panel rows from an already-read item list, so the slow read can
+    /// happen off the main thread and a click does not wait for it.
+    private func makeEntries(from items: [BarItem]) -> [PanelEntry] {
         // Group by bundle, keeping the first item that actually sits in the bar.
         var found: [String: PanelEntry] = [:]
-        for item in AXReader.items() {
+        for item in items {
             guard let bundle = item.bundle,
                   sections.hidden.contains(bundle),
                   found[bundle] == nil else { continue }
@@ -201,6 +212,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                        icon: Self.icon(for: bundle, pid: item.pid))
         }
         return found.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// Reads the bar in the background and updates the cache. `showing` means the
+    /// panel is already up and should be refreshed in place once the read lands.
+    private func refreshEntries(showing: Bool) {
+        entriesGeneration += 1
+        let generation = entriesGeneration
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let items = AXReader.items()
+            DispatchQueue.main.async {
+                guard let self, generation == self.entriesGeneration else { return }
+                self.cachedEntries = self.makeEntries(from: items)
+                if showing, self.panel.isShown { self.panel.update(entries: self.cachedEntries) }
+            }
+        }
+    }
+
+    /// Opens the panel from the cache and corrects it once the background read lands.
+    private func showPanel() {
+        guard let button = statusItem.button else { return }
+        panel.show(entries: cachedEntries, relativeTo: button)
+        refreshEntries(showing: true)
     }
 
     /// The input menu item belongs to `TextInputMenuAgent`, whose own icon is a generic
@@ -327,6 +360,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func restore(bundle: String) {
         panel.close()
         sections.setHidden(bundle, false)
+        cachedEntries.removeAll { $0.bundle == bundle }
         applyHiding()
         refreshManager()
         Log.write("restored \(bundle) to the menu bar")
@@ -500,7 +534,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "restore": if parts.count > 1 { restore(bundle: parts[1]) }
         case "collapse": collapse()
         case "expand": expand()
-        case "panel": statusItem.button.map { panel.show(entries: entries(), relativeTo: $0) }
+        case "panel": showPanel()
         case "close": panel.close()
         case "manager": showManager()
         default: Log.write("  unknown command")
@@ -520,8 +554,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             panel.close()
             return
         }
-        guard let button = statusItem.button else { return }
-        panel.show(entries: entries(), relativeTo: button)
+        // A panel dismissed by the system can close on the mouse-down of this very
+        // click, and the action then arrives on mouse-up with the panel already gone;
+        // without this the arrow would close and reopen in one click instead of
+        // toggling. Never true for a click that closed it from this app's own monitor.
+        if let closedAt = panel.lastClosedBySystemAt, Date().timeIntervalSince(closedAt) < 0.4 {
+            panel.clearLastClosedBySystem()
+            return
+        }
+        showPanel()
     }
 
     @objc private func screensChanged() {

@@ -20,6 +20,10 @@ enum AXReader {
     // several seconds per app.
     private static let timeout: Float = 0.15
     private static let retryTimeout: Float = 0.6
+    // An app that refuses in microseconds was not busy, it just has nothing to give
+    // us (or refuses AX outright). Only a request that actually burned its timeout
+    // is worth a second, slower attempt.
+    private static let slowEnoughToRetry: TimeInterval = 0.05
 
     static var isTrusted: Bool { AXIsProcessTrusted() }
 
@@ -67,22 +71,24 @@ enum AXReader {
         return candidates.indices.compactMap { results[$0] }.flatMap { $0 }
     }
 
-    /// nil means "this app did not answer in time", which callers treat as "keep it
-    /// visible" rather than "hide it" and retry. Answering promptly that there is no
-    /// status bar is a different outcome and must not be retried: on macOS 27 the
-    /// ~90 apps without a menu bar reply with an error in well under a millisecond,
-    /// so conflating the two made every read pay a pointless second pass.
+    /// nil means "this app stayed silent for the whole timeout", which is worth one
+    /// retry. Answering that there is no status bar — quickly, or with an error that
+    /// means "not supported" — is a final answer and must not be retried: on macOS 27
+    /// a dozen system agents reply `cannotComplete` in under a millisecond, and
+    /// retrying those cost a fixed 0.6s on every open.
     private static func read(_ app: Candidate, timeout: Float) -> [BarItem]? {
         let element = AXUIElementCreateApplication(app.pid)
         AXUIElementSetMessagingTimeout(element, timeout)
         var barValue: CFTypeRef?
+        let started = Date()
         let error = AXUIElementCopyAttributeValue(element, "AXExtrasMenuBar" as CFString, &barValue)
+        let elapsed = Date().timeIntervalSince(started)
         guard error == .success, let bar = barValue, CFGetTypeID(bar) == AXUIElementGetTypeID() else {
-            // "No such attribute" and "nothing there" are answers: nothing to hide.
-            // Anything else means the app stayed silent, so it is worth one retry.
             switch error {
-            case .success, .noValue, .attributeUnsupported: return []
-            default: return nil
+            case .success, .noValue, .attributeUnsupported:
+                return []
+            default:
+                return elapsed >= slowEnoughToRetry ? nil : []
             }
         }
         let children = self.children(bar as! AXUIElement)

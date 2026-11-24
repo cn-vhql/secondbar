@@ -11,16 +11,29 @@ struct PanelEntry {
 
 /// The drop-down second bar: a grid of the icons currently kept out of the menu
 /// bar. Clicking one opens that app's own menu.
-final class Panel: NSObject {
+final class Panel: NSObject, NSPopoverDelegate {
     private let popover = NSPopover()
     private let view = PanelView()
+    private weak var button: NSStatusBarButton?
+    private var outsideMonitor: Any?
+    private var localMonitor: Any?
+    /// When the panel last went away without this app asking for it (Escape, or the
+    /// system dismissing a transient popover). A click on the arrow that closes the
+    /// panel arrives as an action too, and without this the action would immediately
+    /// reopen it, which reads as "the arrow does not toggle".
+    private(set) var lastClosedBySystemAt: Date?
+    /// Set by `close()` so a close this app asked for is never mistaken for one the
+    /// system made: that distinction is what keeps fast repeated clicks honest.
+    private var closeRequested = false
 
     var onPick: ((String, _ restore: Bool) -> Void)?
+    var onClose: (() -> Void)?
 
     override init() {
         super.init()
         popover.behavior = .transient
         popover.animates = false
+        popover.delegate = self
         let controller = NSViewController()
         controller.view = view
         popover.contentViewController = controller
@@ -29,18 +42,73 @@ final class Panel: NSObject {
 
     var isShown: Bool { popover.isShown }
 
+    var shownBundles: [String] { view.entries.map(\.bundle) }
+
     func show(entries: [PanelEntry], relativeTo button: NSStatusBarButton) {
+        self.button = button
         view.entries = entries
         popover.contentSize = view.fittingSize
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        // A LSUIElement app never becomes active on its own, so NSPopover's own
+        // "click outside to dismiss" does not reliably fire. Watch for the click.
+        watchOutsideClicks()
         DispatchQueue.main.async { [weak self] in
             guard let window = self?.popover.contentViewController?.view.window else { return }
             Log.write("panel shown frame=\(window.frame) entries=\(entries.count)")
         }
     }
 
+    /// Replaces the contents while the panel is open, without moving it.
+    func update(entries: [PanelEntry]) {
+        guard popover.isShown else { return }
+        view.entries = entries
+        popover.contentSize = view.fittingSize
+    }
+
     func close() {
+        closeRequested = true
         popover.performClose(nil)
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        lastClosedBySystemAt = closeRequested ? nil : Date()
+        closeRequested = false
+        stopWatchingOutsideClicks()
+        onClose?()
+    }
+
+    /// Consumed by the arrow's action when it was the click that closed the panel.
+    func clearLastClosedBySystem() {
+        lastClosedBySystemAt = nil
+    }
+
+    private func watchOutsideClicks() {
+        stopWatchingOutsideClicks()
+        outsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            DispatchQueue.main.async { self?.closeIfClickIsOutside() }
+        }
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            self?.closeIfClickIsOutside()
+            return event
+        }
+    }
+
+    private func stopWatchingOutsideClicks() {
+        if let monitor = outsideMonitor { NSEvent.removeMonitor(monitor) }
+        if let monitor = localMonitor { NSEvent.removeMonitor(monitor) }
+        outsideMonitor = nil
+        localMonitor = nil
+    }
+
+    private func closeIfClickIsOutside() {
+        guard popover.isShown else { return }
+        let point = NSEvent.mouseLocation
+        if let window = popover.contentViewController?.view.window, window.frame.contains(point) { return }
+        // The arrow itself toggles through its action; closing here as well would
+        // close and reopen in one click.
+        if let button, let window = button.window,
+           window.convertToScreen(button.convert(button.bounds, to: nil)).contains(point) { return }
+        close()
     }
 }
 
