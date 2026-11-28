@@ -53,7 +53,7 @@ including why an icon could not be pressed.
 | Action | Result |
 | --- | --- |
 | Click `»` | Open the second bar; click again, or click anywhere else, to close it |
-| Click an icon in the second bar | Open that app's own menu |
+| Click an icon in the second bar | Open that app's own menu — or start it, if it is folded but not running |
 | ⌥-click an icon in the second bar | Keep that app in the menu bar permanently |
 | ⌥-click `»` | Open the manager window |
 | Right-click `»` | Menu: expand/collapse all, manage apps, launch at login, permissions, quit |
@@ -124,6 +124,12 @@ released when SecondBar quits.
 are not third-party items; macOS does not let anything fold them.
 
 **Folding is per app, not per icon.** An app's icons fold and unfold together.
+
+**A folded app that is not running still gets a row.** It is drawn dimmed, and
+clicking it starts the app. The rows come from your folded set, not from what macOS
+will talk about: measured on macOS 27, `AXExtrasMenuBar` answers `cannotComplete`
+(-25212) for some apps precisely while their item is folded, so a read-based list
+silently dropped folded apps launched after folding.
 
 ## Self-tests
 

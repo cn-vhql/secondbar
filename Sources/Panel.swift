@@ -7,6 +7,9 @@ struct PanelEntry {
     let bundle: String
     let name: String
     let icon: NSImage
+    /// Folded but not running: its row is drawn dimmed, because pressing it cannot
+    /// open anything until the app is up.
+    var isRunning: Bool = true
 }
 
 /// The drop-down second bar: a grid of the icons currently kept out of the menu
@@ -143,11 +146,14 @@ final class PanelView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     override var intrinsicContentSize: NSSize {
+        // `rebuild` pads every row out to `columns` cells, so the panel is always
+        // that wide — sizing it to the number of entries clipped the odd short row.
         let count = max(entries.count, 1)
-        let columns = min(count, Self.columns)
+        let columns = entries.isEmpty ? 1 : Self.columns
         let rows = max(1, Int(ceil(Double(count) / Double(Self.columns))))
-        return NSSize(width: CGFloat(columns) * Self.cell + 20,
-                      height: CGFloat(rows) * Self.cell + 20)
+        let spacing = Self.cell + 2
+        return NSSize(width: CGFloat(columns) * spacing + 18,
+                      height: CGFloat(rows) * spacing + 18)
     }
 
     private func rebuild() {
@@ -201,7 +207,8 @@ final class PanelView: NSView {
         button.target = self
         button.action = #selector(pick(_:))
         button.identifier = NSUserInterfaceItemIdentifier(entry.bundle)
-        button.toolTip = entry.name
+        button.toolTip = entry.isRunning ? entry.name : "\(entry.name)（未运行，点一下启动）"
+        button.alphaValue = entry.isRunning ? 1 : 0.45
         button.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             button.widthAnchor.constraint(equalToConstant: Self.cell),
