@@ -7,9 +7,6 @@ struct PanelEntry {
     let bundle: String
     let name: String
     let icon: NSImage
-    /// Folded but not running: its row is drawn dimmed, because pressing it cannot
-    /// open anything until the app is up.
-    var isRunning: Bool = true
 }
 
 /// The drop-down second bar: a grid of the icons currently kept out of the menu
@@ -207,8 +204,7 @@ final class PanelView: NSView {
         button.target = self
         button.action = #selector(pick(_:))
         button.identifier = NSUserInterfaceItemIdentifier(entry.bundle)
-        button.toolTip = entry.isRunning ? entry.name : "\(entry.name)（未运行，点一下启动）"
-        button.alphaValue = entry.isRunning ? 1 : 0.45
+        button.toolTip = entry.name
         button.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             button.widthAnchor.constraint(equalToConstant: Self.cell),

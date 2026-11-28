@@ -198,28 +198,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Second bar
 
-    /// Builds the panel rows. The rows come from the folded set, not from the item
-    /// list: a folded app belongs in the second bar whether or not macOS will talk
-    /// about its item right now. Measured on macOS 27, `AXExtrasMenuBar` answers
-    /// `cannotComplete` (-25212) for some apps exactly while their item is folded
-    /// (QQ, WireGuard, CC Switch), so deriving rows from the read made a folded app
-    /// that was launched after folding simply not appear.
+    /// Builds the panel rows: the folded apps that are actually running. The rows
+    /// cannot come from the item list alone — measured on macOS 27,
+    /// `AXExtrasMenuBar` answers `cannotComplete` (-25212) for some apps exactly
+    /// while their item is folded (QQ, WireGuard, CC Switch), so an app folded and
+    /// then launched would be missing. They cannot be the whole folded set either:
+    /// an app that is not running has no icon in the bar and no menu to open, so
+    /// listing it would put something in the second bar that is not there.
     ///
-    /// The item list is only used to name and draw a row that does have one.
+    /// The item list is only used for the name and glyph of a row that has one.
     private func makeEntries(from items: [BarItem]) -> [PanelEntry] {
         var firstItem: [String: BarItem] = [:]
         for item in items {
             guard let bundle = item.bundle, firstItem[bundle] == nil else { continue }
             firstItem[bundle] = item
         }
-        return sections.hidden.map { bundle -> PanelEntry in
+        return sections.hidden.compactMap { bundle -> PanelEntry? in
+            guard let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundle).first
+            else { return nil }
             let item = firstItem[bundle]
-            let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundle).first
-            let pid = item?.pid ?? running?.processIdentifier
             return PanelEntry(bundle: bundle,
-                              name: Self.displayName(for: bundle, pid: pid, item: item),
-                              icon: Self.icon(for: bundle, pid: pid),
-                              isRunning: running != nil)
+                              name: Self.displayName(for: bundle, pid: running.processIdentifier, item: item),
+                              icon: Self.icon(for: bundle, pid: running.processIdentifier))
         }
         .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
@@ -382,13 +382,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func open(bundle: String) {
         Log.write("open: \(bundle) requested from the second bar")
         panel.close()
-        // Folded but not running: there is no item to press and no menu to open, so
-        // this is a launch. The app is let back into the bar while it starts up and
-        // folds again on the next applyHiding, once it owns an item.
-        if NSRunningApplication.runningApplications(withBundleIdentifier: bundle).isEmpty {
-            launch(bundle: bundle)
-            return
-        }
         // Clicking a second icon while the first is still being watched must not
         // leave the first watcher running: it would clear `temporary` in the middle
         // of the second open, folding the icon that is about to be pressed.
@@ -479,28 +472,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         releaseTimer = timer
         RunLoop.main.add(timer, forMode: .common)
-    }
-
-    /// Starts a folded app that is not running, so its icon in the second bar does
-    /// something useful instead of nothing.
-    private func launch(bundle: String) {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else {
-            Log.write("launch: \(bundle) has no bundle on disk")
-            return
-        }
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
-        NSWorkspace.shared.openApplication(at: url, configuration: configuration) { [weak self] app, error in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                if let error {
-                    Log.write("launch: \(bundle) failed: \(error.localizedDescription)")
-                    return
-                }
-                Log.write("launch: started \(bundle) (pid \(app?.processIdentifier ?? 0))")
-                self.refreshEntries(showing: false)
-            }
-        }
     }
 
     /// The app's status item accepted the press but opened no menu.
@@ -612,6 +583,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func appsChanged() {
+        // An app that quits loses its row, one that launches gains it: the rows are
+        // the folded apps that are running, so both directions need the refresh.
+        refreshEntries(showing: true)
         guard !isExpanded else { return }
         applyHiding()
     }

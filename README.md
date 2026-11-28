@@ -53,7 +53,7 @@ including why an icon could not be pressed.
 | Action | Result |
 | --- | --- |
 | Click `»` | Open the second bar; click again, or click anywhere else, to close it |
-| Click an icon in the second bar | Open that app's own menu — or start it, if it is folded but not running |
+| Click an icon in the second bar | Open that app's own menu |
 | ⌥-click an icon in the second bar | Keep that app in the menu bar permanently |
 | ⌥-click `»` | Open the manager window |
 | Right-click `»` | Menu: expand/collapse all, manage apps, launch at login, permissions, quit |
@@ -125,11 +125,15 @@ are not third-party items; macOS does not let anything fold them.
 
 **Folding is per app, not per icon.** An app's icons fold and unfold together.
 
-**A folded app that is not running still gets a row.** It is drawn dimmed, and
-clicking it starts the app. The rows come from your folded set, not from what macOS
-will talk about: measured on macOS 27, `AXExtrasMenuBar` answers `cannotComplete`
-(-25212) for some apps precisely while their item is folded, so a read-based list
-silently dropped folded apps launched after folding.
+**The second bar lists what is in the bar right now.** A folded app that is not
+running has no icon there and no menu to open, so it gets no row; start it and its
+row appears, quit it and the row goes. Which apps are folded is what you set in the
+manager and stays as it is either way.
+
+Rows cannot come from the Accessibility read alone, either: measured on macOS 27,
+`AXExtrasMenuBar` answers `cannotComplete` (-25212) for some apps precisely while
+their item is folded (QQ, WireGuard, CC Switch), so a read-based list dropped folded
+apps that were launched after folding.
 
 ## Self-tests
 
